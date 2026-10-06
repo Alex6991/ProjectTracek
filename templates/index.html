@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Трекер бюджета</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --bg: #f9f9f9;
+            --text: #333;
+            --card-bg: #ffffff;
+            --card-shadow: rgba(0,0,0,0.08);
+            --heading: #1976d2;
+            --muted: #777;
+            --table-border: #eee;
+            --table-hover: #f1f1f1;
+            --th-bg: #1976d2;
+            --th-text: #ffffff;
+            --expense-box-bg: #ffebee;
+            --income-box-bg: #e8f5e9;
+        }
+
+        body.dark {
+            --bg: #1e1e1e;
+            --text: #e0e0e0;
+            --card-bg: #2a2a2a;
+            --card-shadow: rgba(0,0,0,0.4);
+            --heading: #64b5f6;
+            --muted: #aaa;
+            --table-border: #3a3a3a;
+            --table-hover: #333;
+            --th-bg: #1565c0;
+            --th-text: #ffffff;
+            --expense-box-bg: #3a1e1e;
+            --income-box-bg: #1e3a1e;
+        }
+
+        * { transition: background 0.2s, color 0.2s; }
+
+        body { font-family: Arial, sans-serif; max-width: 900px; margin: 30px auto;
+               padding: 0 15px; background: var(--bg); color: var(--text); }
+        h1 { color: var(--heading); }
+        h2 { font-size: 1.1em; color: var(--muted); margin-bottom: 10px; }
+
+        .header-row { display: flex; justify-content: space-between; align-items: center; }
+        .theme-toggle { background: var(--card-bg); border: 1px solid var(--table-border);
+                        color: var(--text); padding: 8px 12px; border-radius: 8px;
+                        cursor: pointer; font-size: 1.1em; }
+        .theme-toggle:hover { opacity: 0.8; }
+
+        .top-bar { display: flex; align-items: center; gap: 15px; flex-wrap: wrap; margin-bottom: 15px; }
+        .btn { display: inline-block; padding: 8px 14px; background: var(--th-bg); color: white;
+               text-decoration: none; border-radius: 5px; }
+        .btn:hover { opacity: 0.9; }
+        .summary { display: flex; gap: 20px; flex-wrap: wrap; margin: 20px 0; }
+        .card { background: var(--card-bg); padding: 15px 20px; border-radius: 8px; min-width: 180px;
+                box-shadow: 0 1px 3px var(--card-shadow); }
+        .card .label { font-size: 0.9em; color: var(--muted); }
+        .card .value { font-size: 1.4em; font-weight: bold; margin-top: 5px; }
+        .income { color: #2e7d32; }
+        body.dark .income { color: #66bb6a; }
+        .expense { color: #d32f2f; }
+        body.dark .expense { color: #ef5350; }
+        .balance-pos { color: #2e7d32; }
+        body.dark .balance-pos { color: #66bb6a; }
+        .balance-neg { color: #d32f2f; }
+        body.dark .balance-neg { color: #ef5350; }
+
+        .charts { display: flex; gap: 20px; flex-wrap: wrap; margin-bottom: 20px; }
+        .chart-box { background: var(--card-bg); padding: 20px; border-radius: 8px;
+                     flex: 1; min-width: 300px; box-shadow: 0 1px 3px var(--card-shadow); }
+
+        .categories-row { display: flex; gap: 20px; flex-wrap: wrap; margin-bottom: 20px; }
+        .categories { padding: 10px 15px; border-radius: 8px; flex: 1; min-width: 250px; }
+        .categories.expense-box { background: var(--expense-box-bg); }
+        .categories.income-box { background: var(--income-box-bg); }
+        .categories ul { margin: 5px 0; padding-left: 20px; }
+
+        table { width: 100%; border-collapse: collapse; background: var(--card-bg);
+                border-radius: 8px; overflow: hidden; }
+        th, td { padding: 10px 12px; border-bottom: 1px solid var(--table-border); text-align: left; }
+        th { background: var(--th-bg); color: var(--th-text); }
+        tr:hover { background: var(--table-hover); }
+        .delete { color: #d32f2f; text-decoration: none; font-weight: bold; }
+        .edit { color: var(--heading); text-decoration: none; font-weight: bold; margin-right: 8px; }
+        select { padding: 6px 10px; border-radius: 5px; border: 1px solid var(--table-border);
+                 background: var(--card-bg); color: var(--text); }
+        .type-icon { font-size: 1.1em; }
+    </style>
+</head>
+<body>
+    <div class="header-row">
+        <h1>💰 Трекер бюджета</h1>
+        <button class="theme-toggle" id="themeToggle" onclick="toggleTheme()">🌙</button>
+    </div>
+
+    <div class="top-bar">
+        <a href="/add" class="btn">+ Добавить запись</a>
+        <a href="/export{% if selected_month %}?month={{ selected_month }}{% endif %}" class="btn btn-csv">
+    📥 Скачать CSV
+</a>
+
+        <form method="get" action="/" style="margin: 0;">
+            <label for="month">Месяц:</label>
+            <select name="month" id="month" onchange="this.form.submit()">
+                <option value="">Все месяцы</option>
+                {% for m in months %}
+                    <option value="{{ m.month }}" {% if m.month == selected_month %}selected{% endif %}>
+                        {{ m.month }}
+                    </option>
+                {% endfor %}
+            </select>
+        </form>
+    </div>
+
+    <div class="summary">
+        <div class="card">
+            <div class="label">Доходы</div>
+            <div class="value income">{{ "%.2f"|format(total_income) }} ₽</div>
+        </div>
+        <div class="card">
+            <div class="label">Расходы</div>
+            <div class="value expense">{{ "%.2f"|format(total_expense) }} ₽</div>
+        </div>
+        <div class="card">
+            <div class="label">Баланс</div>
+            <div class="value {% if balance >= 0 %}balance-pos{% else %}balance-neg{% endif %}">
+                {{ "%.2f"|format(balance) }} ₽
+            </div>
+        </div>
+    </div>
+
+    {% if expense_labels or income_labels %}
+    <div class="charts">
+        {% if expense_labels %}
+        <div class="chart-box">
+            <h2>💸 Расходы по категориям</h2>
+            <canvas id="expenseChart"></canvas>
+        </div>
+        {% endif %}
+
+        {% if income_labels %}
+        <div class="chart-box">
+            <h2>💰 Доходы по категориям</h2>
+            <canvas id="incomeChart"></canvas>
+        </div>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    <div class="categories-row">
+        {% if expense_categories %}
+        <div class="categories expense-box">
+            <strong>Расходы по категориям:</strong>
+            <ul>
+                {% for cat, sum in expense_categories.items() %}
+                    <li>{{ cat }}: {{ "%.2f"|format(sum) }} ₽</li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+
+        {% if income_categories %}
+        <div class="categories income-box">
+            <strong>Доходы по категориям:</strong>
+            <ul>
+                {% for cat, sum in income_categories.items() %}
+                    <li>{{ cat }}: {{ "%.2f"|format(sum) }} ₽</li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+    </div>
+
+    {% if expenses %}
+    <table>
+        <tr>
+            <th>Дата</th>
+            <th>Тип</th>
+            <th>Категория</th>
+            <th>Сумма</th>
+            <th>Комментарий</th>
+            <th></th>
+        </tr>
+        {% for e in expenses %}
+        <tr>
+            <td>{{ e.date }}</td>
+            <td class="type-icon">
+                {% if e.type == "income" %}💰{% else %}💸{% endif %}
+            </td>
+            <td>{{ e.category }}</td>
+            <td class="{% if e.type == 'income' %}income{% else %}expense{% endif %}">
+                {% if e.type == "income" %}+{% else %}−{% endif %}{{ "%.2f"|format(e.amount) }} ₽
+            </td>
+            <td>{{ e.comment or "—" }}</td>
+            <td>
+                <a href="/edit/{{ e.id }}" class="edit">✎</a>
+                <a href="/delete/{{ e.id }}" class="delete"
+                   onclick="return confirm('Удалить?')">✕</a>
+            </td>
+        </tr>
+        {% endfor %}
+    </table>
+    {% else %}
+    <p>Пока нет записей. Добавь первую!</p>
+    {% endif %}
+
+    {% if expense_labels %}
+    <script>
+        new Chart(document.getElementById('expenseChart'), {
+            type: 'doughnut',
+            data: {
+                labels: {{ expense_labels | tojson }},
+                datasets: [{
+                    data: {{ expense_values | tojson }},
+                    backgroundColor: [
+                        '#d32f2f', '#e53935', '#f57c00', '#fbc02d',
+                        '#c2185b', '#e91e63', '#ff7043', '#8e24aa'
+                    ],
+                }]
+            },
+            options: { responsive: true, plugins: { legend: { position: 'bottom' } } }
+        });
+    </script>
+    {% endif %}
+
+    {% if income_labels %}
+    <script>
+        new Chart(document.getElementById('incomeChart'), {
+            type: 'doughnut',
+            data: {
+                labels: {{ income_labels | tojson }},
+                datasets: [{
+                    data: {{ income_values | tojson }},
+                    backgroundColor: [
+                        '#2e7d32', '#388e3c', '#43a047', '#66bb6a',
+                        '#00897b', '#00acc1', '#7cb342', '#558b2f'
+                    ],
+                }]
+            },
+            options: { responsive: true, plugins: { legend: { position: 'bottom' } } }
+        });
+    </script>
+    {% endif %}
+
+    <script>
+        function applyTheme(theme) {
+            const body = document.body;
+            const btn = document.getElementById('themeToggle');
+            if (theme === 'dark') {
+                body.classList.add('dark');
+                btn.textContent = '☀️';
+            } else {
+                body.classList.remove('dark');
+                btn.textContent = '🌙';
+            }
+        }
+
+        function toggleTheme() {
+            const isDark = document.body.classList.contains('dark');
+            const newTheme = isDark ? 'light' : 'dark';
+            applyTheme(newTheme);
+            localStorage.setItem('theme', newTheme);
+        }
+
+        // При загрузке страницы — применяем сохранённую тему
+        const savedTheme = localStorage.getItem('theme') || 'light';
+        applyTheme(savedTheme);
+    </script>
+</body>
+</html>

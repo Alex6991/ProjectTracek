@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>{% if expense %}Редактировать{% else %}Добавить{% endif %} запись</title>
+    <style>
+        :root {
+            --bg: #f9f9f9;
+            --text: #333;
+            --card-bg: #ffffff;
+            --heading: #1976d2;
+            --border: #ccc;
+            --btn-bg: #1976d2;
+        }
+        body.dark {
+            --bg: #1e1e1e;
+            --text: #e0e0e0;
+            --card-bg: #2a2a2a;
+            --heading: #64b5f6;
+            --border: #444;
+            --btn-bg: #1565c0;
+        }
+        * { transition: background 0.2s, color 0.2s; }
+        body { font-family: Arial, sans-serif; max-width: 500px; margin: 40px auto;
+               padding: 0 15px; background: var(--bg); color: var(--text); }
+        .header-row { display: flex; justify-content: space-between; align-items: center; }
+        h1 { color: var(--heading); }
+        .theme-toggle { background: var(--card-bg); border: 1px solid var(--border);
+                        color: var(--text); padding: 8px 12px; border-radius: 8px;
+                        cursor: pointer; font-size: 1.1em; }
+        label { display: block; margin-top: 15px; font-weight: bold; }
+        input, select { width: 100%; padding: 9px; margin-top: 5px;
+                        border: 1px solid var(--border); border-radius: 5px;
+                        box-sizing: border-box; background: var(--card-bg); color: var(--text); }
+        .radio-group { display: flex; gap: 20px; margin-top: 8px; }
+        .radio-group label { font-weight: normal; margin: 0; display: flex; align-items: center; gap: 5px; }
+        .radio-group input { width: auto; }
+        button[type="submit"] { margin-top: 20px; padding: 10px 18px; background: var(--btn-bg);
+                                color: white; border: none; border-radius: 5px;
+                                cursor: pointer; font-size: 1em; }
+        button[type="submit"]:hover { opacity: 0.9; }
+        a { display: inline-block; margin-top: 15px; color: var(--heading); text-decoration: none; }
+    </style>
+</head>
+<body>
+    <div class="header-row">
+        <h1>{% if expense %}✎ Редактировать{% else %}➕ Добавить{% endif %} запись</h1>
+        <button class="theme-toggle" id="themeToggle" onclick="toggleTheme()">🌙</button>
+    </div>
+
+    <form method="post">
+        <label>Тип операции</label>
+        <div class="radio-group">
+            <label>
+                <input type="radio" name="type" value="expense"
+                       {% if not expense or expense.type == "expense" %}checked{% endif %}>
+                💸 Расход
+            </label>
+            <label>
+                <input type="radio" name="type" value="income"
+                       {% if expense and expense.type == "income" %}checked{% endif %}>
+                💰 Доход
+            </label>
+        </div>
+
+        <label>Сумма (₽)</label>
+        <input type="number" name="amount" step="0.01" min="0" required
+               value="{{ expense.amount if expense else '' }}">
+
+        <label>Категория</label>
+        <select name="category" required>
+            {% set cats = ['Еда', 'Транспорт', 'Развлечения', 'Жильё', 'Здоровье',
+                           'Зарплата', 'Фриланс', 'Подарок', 'Другое'] %}
+            {% for cat in cats %}
+                <option value="{{ cat }}"
+                    {% if expense and expense.category == cat %}selected{% endif %}>
+                    {{ cat }}
+                </option>
+            {% endfor %}
+        </select>
+
+        <label>Комментарий (необязательно)</label>
+        <input type="text" name="comment" maxlength="100"
+               value="{{ expense.comment if expense else '' }}">
+
+        <label>Дата</label>
+        <input type="date" name="date"
+               value="{{ expense.date if expense else '' }}">
+
+        <button type="submit">{% if expense %}Сохранить{% else %}Добавить{% endif %}</button>
+    </form>
+
+    <a href="/">← Назад к списку</a>
+
+    <script>
+        function applyTheme(theme) {
+            const body = document.body;
+            const btn = document.getElementById('themeToggle');
+            if (theme === 'dark') {
+                body.classList.add('dark');
+                btn.textContent = '☀️';
+            } else {
+                body.classList.remove('dark');
+                btn.textContent = '🌙';
+            }
+        }
+
+        function toggleTheme() {
+            const isDark = document.body.classList.contains('dark');
+            const newTheme = isDark ? 'light' : 'dark';
+            applyTheme(newTheme);
+            localStorage.setItem('theme', newTheme);
+        }
+
+        const savedTheme = localStorage.getItem('theme') || 'light';
+        applyTheme(savedTheme);
+    </script>
+</body>
+</html>
